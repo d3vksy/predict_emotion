@@ -1,5 +1,5 @@
 # ---------- Colab 전용 기본 설정 ----------
-!pip install -q gradio openpyxl scikit-learn
+!pip install -q openpyxl
 
 import pandas as pd
 import random
@@ -8,13 +8,11 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
-import gradio as gr
 
 # ---------- 파일 업로드 ----------
 from google.colab import files
 uploaded = files.upload()
 
-# 예: Validation.xlsx를 업로드했다고 가정
 file_name = list(uploaded.keys())[0]
 df = pd.read_excel(file_name)
 
@@ -63,7 +61,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 model = LogisticRegression(max_iter=1000, solver='saga', class_weight='balanced')
 model.fit(X_train, y_train)
 
-# ---------- 예측 함수 (확률 분포 반환) ----------
+# ---------- 예측 함수 ----------
 def predict_emotion_probs(text):
     vec = vectorizer.transform([text])
     if vec.nnz == 0:
@@ -71,16 +69,21 @@ def predict_emotion_probs(text):
     
     proba = model.predict_proba(vec)[0]
     emotion_labels = le.classes_
-    result = {label: round(prob, 3) for label, prob in zip(emotion_labels, proba)}
-    return result
+    # float로 변환 후 딕셔너리 생성
+    result = {label: round(float(prob), 3) for label, prob in zip(emotion_labels, proba)}
 
-# ---------- Gradio UI ----------
-iface = gr.Interface(
-    fn=predict_emotion_probs,
-    inputs=gr.Textbox(lines=3, label="한글 문장 입력"),
-    outputs=gr.JSON(label="감정 분포 (0~1 사이 확률)"),
-    title="한글 감정 예측기 (확률 출력 버전)",
-    description="문장을 입력하면 감정 대분류별 확률 분포를 출력합니다. 예: {'기쁨': 0.7, '슬픔': 0.1, ...}"
-)
+    # 감정 강도 기준 내림차순 정렬
+    sorted_result = dict(sorted(result.items(), key=lambda x: x[1], reverse=True))
+    return sorted_result
 
-iface.launch(share=True)
+
+# ---------- 사용자 입력 루프 ----------
+print("감정 예측기입니다. 문장을 입력하세요 (종료하려면 'exit' 입력)")
+
+while True:
+    user_input = input("문장 입력: ")
+    if user_input.strip().lower() == 'exit':
+        print("프로그램을 종료합니다.")
+        break
+    result = predict_emotion_probs(user_input)
+    print("감정 분포:", result)
